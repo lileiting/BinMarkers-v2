@@ -35,7 +35,7 @@ OPTIONS
     -t, --title   Treat first line as title [default: no title line]
     -w, --window  Window size [default: 10_000]
                   If -w set to 0, the script will merge adjacent
-                  identical markers [Missing data are not special].
+                  identical markers.
     -o, --out     Output file [default: stdout]
     -h, --help    Print help
 
