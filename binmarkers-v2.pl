@@ -34,6 +34,11 @@ Description
     Majority rules:
         if two genotypes were equal weights, treat as missing data
 
+    Example commands:
+        perl binmarkers-v2.pl example.input.markers.txt -w 10_000 -o out.txt
+        perl binmarkers-v2.pl out.txt -w 0 -o out.w0.txt
+
+
 OPTIONS
     -t, --title   Treat first line as title [default: no title line]
     -w, --window  Window size [default: 10_000]
