@@ -1,12 +1,13 @@
 #!/usr/bin/env perl
 
-# Idea by Ray Ming, wrote by Leiting Li, Nov 3, 2016
+# Idea by Ray Ming, written by Leiting Li, Nov 3, 2016
 
 use warnings;
 use strict;
 use FindBin;
 use Getopt::Long;
 use List::Util qw(max min);
+our $m = '-';
 
 sub main_usage{
     print <<"end_of_usage";
@@ -74,11 +75,11 @@ sub main{
         B    => 'b',
         h    => 'h',
         H    => 'h',
-        '-'  => 'u',
-        u    => 'u',
-        '.'  => 'u',
-        '..' => 'u',
-        '--' => 'u'
+        '-'  => $m,
+        u    => $m,
+        '.'  => $m,
+        '..' => $m,
+        '--' => $m
     );
     my $count_markers = 0;
     while(<$fh>){
@@ -177,11 +178,11 @@ sub _majority_rules{
         my @gt = map{$data_ref->{$scaffold}->{$_}->[$i]} @positions;
         my %gt;
         map{$gt{$_}++}@gt;
-        delete $gt{'u'};
+        delete $gt{$m};
         my @gt_keys = sort {$gt{$b} <=> $gt{$a}} keys %gt;
         my $bin_gt;
         if(@gt_keys == 0){
-            $bin_gt = 'u';
+            $bin_gt = $m;
         }
         elsif(@gt_keys == 1){
             $bin_gt = $gt_keys[0];
@@ -191,7 +192,7 @@ sub _majority_rules{
                 $bin_gt = $gt_keys[0];
             }
             else{
-                $bin_gt = 'u';
+                $bin_gt = $m;
             }
         }
         push @new_gt, $bin_gt;
