@@ -18,8 +18,7 @@ USAGE
 Description
     Asssume the input data is a tab-seperated matrix,
     with first line as title [optional] and first column as marker name.
-    Markers name format: scaffold-start:end:markers or
-        scaffold_start:end:markers.
+    Markers name format: scaffold_start:end:markers.
     For example, scaffold0001_10:10000:10 means a bin markers
         spanned scaffold0001, from 10 bp to 10000 bp, included
         10 original markers.
@@ -31,6 +30,9 @@ Description
     This protocol required two steps:
     1. bin markers by 10 kb window using majority rules [-w 10_000]
     2. bin identical markers [-w 0]
+
+    Majority rules:
+        if two genotypes were equal weights, treat as missing data
 
 OPTIONS
     -t, --title   Treat first line as title [default: no title line]
