@@ -36,9 +36,6 @@ OPTIONS
     -w, --window  Window size [default: 10_000]
                   If -w set to 0, the script will merge adjacent
                   identical markers [Missing data are not special].
-                  If -w set to -1, the script will merge adjacent
-                  no conflicting markers [Missing data could be filled by
-                  adjacent markers]
     -o, --out     Output file [default: stdout]
     -h, --help    Print help
 
@@ -151,26 +148,6 @@ sub main{
             }
         }
     }
-    elsif($window == -1){
-        for my $scaffold (@scaffolds){
-            my @positions = sort{$a <=> $b} keys %{$data{$scaffold}};
-            my $markers_in_scf = scalar(@positions);
-            warn "Process $scaffold ($markers_in_scf markers) ...\n";
-
-            my @stack = ($positions[0]);
-            for (my $i = 1; $i <= $#positions; $i++){
-                if(_is_conflicting(\%data, $scaffold, $positions[$i], @stack)){
-                    _merge_no_conflicting_markers(\%data, $scaffold, @stack);
-                    @stack = ();
-                }
-                push @stack, $positions[$i];
-            }
-            if(@stack){
-                _merge_no_conflicting_markers(\%data, $scaffold, @stack);
-                @stack = ();
-            }
-        }
-    }
     else{
         die "CAUTION: window size `$window` < -1 !!!";
     }
@@ -235,19 +212,6 @@ sub _not_identical{
     return 0;
 }
 
-sub _is_conflicting{
-    my($data_ref, $scaffold, $position, @positions) = @_;
-    my $max_idx = $#{$data_ref->{$scaffold}->{$position}};
-    for (@positions){
-        for (my $i = 2; $i <= $max_idx; $i++){
-            my $gt1 = $data_ref->{$scaffold}->{$position}->[$i];
-            my $gt2 = $data_ref->{$scaffold}->{$_}->[$i];
-            return 1 if $gt1 ne $gt2 and $gt1 ne 'u' and $gt2 ne 'u';
-        }
-    }
-    return 0;
-}
-
 sub _merge_identical_markers{
     my ($data_ref, $scaffold, @positions) = @_;
     my $first_pos = $positions[0];
@@ -267,49 +231,6 @@ sub _merge_identical_markers{
 
     my @genotypes = @{$data_ref->{$scaffold}->{$first_pos}};
     @genotypes = @genotypes[2..$#genotypes];
-    print join("\t", $new_marker_name, @genotypes) . "\n";
-}
-
-sub _merge_no_conflicting_markers{
-    my ($data_ref, $scaffold, @positions) = @_;
-    my $first_pos = $positions[0];
-
-    my @tmp_pos;
-    my $num_of_markers = 0;
-    for my $start_pos (@positions){
-        my $end_pos = $start_pos + $data_ref->{$scaffold}->{$start_pos}->[0] - 1;
-        push @tmp_pos, $start_pos, $end_pos;
-        $num_of_markers += $data_ref->{$scaffold}->{$start_pos}->[1];
-    }
-    my $start_pos = min(@tmp_pos);
-    my $width     = max(@tmp_pos) - $start_pos + 1;
-
-    my $new_marker_name = $scaffold . '_' .
-        join(":", $start_pos, $width, $num_of_markers);
-
-    #my @genotypes = @{$data_ref->{$scaffold}->{$first_pos}};
-    #@genotypes = @genotypes[2..$#genotypes];
-
-    my @genotypes;
-    my $max_idx = $#{$data_ref->{$scaffold}->{$first_pos}};
-    for(my $i = 2; $i <= $max_idx; $i++){
-        my $bin_gt;
-        my @gt = map{$data_ref->{$scaffold}->{$_}->[$i]}@positions;
-        my %gt;
-        map{$gt{$_}++}@gt;
-        delete $gt{'u'};
-        if(keys %gt == 0){
-            $bin_gt = 'u'
-        }
-        elsif(keys %gt == 1){
-            ($bin_gt) = keys %gt;
-        }
-        else{
-            die;
-        }
-        push @genotypes, $bin_gt;
-    }
-
     print join("\t", $new_marker_name, @genotypes) . "\n";
 }
 
