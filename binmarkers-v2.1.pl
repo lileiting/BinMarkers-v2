@@ -31,7 +31,7 @@ Description
     A is equivalent to a; B is equivalent to b;
     H is equivalent to h; `u`, `--`, `.`, `..` are equivalent to `-`.
 
-    This protocol required four steps:
+    This protocol required four main steps:
     1. Bin markers by 10 kb window using majority rules [-m 1 -w 10_000]
     2. Fill missing genotypes using majority rules:
         round 1: [-m 2 -w 3]
@@ -56,6 +56,17 @@ Description
         perl binmarkers-v2.1.pl out.step2.3.txt -o out.step3.txt -m 3 -w 5
         perl binmarkers-v2.1.pl out.step3.txt -o out.step4.txt -m 4
 
+    Or,
+        perl binmarkers-v2.1.pl example.input.markers.txt -m 0 -w 10_000 |
+        perl binmarkers-v2.1.pl -m 2 -w 3 |
+        perl binmarkers-v2.1.pl -m 2 -w 5 |
+        perl binmarkers-v2.1.pl -m 2 -w 7 |
+        perl binmarkers-v2.1.pl -m 3 -w 5 | 
+        perl binmarkers-v2.1.pl -m 4 -o out.step4.txt
+
+    Or, (a shortcut for the above command)
+        perl binmarkers-v2.1.pl example.input.markers.txt -pipeline1 -o out.step4.txt
+
     For manual checking, just copy data in the `example.input.markers.txt` file
         and the `out.step4.txt` file in an Excel file and then sort by
         marker names
@@ -69,7 +80,7 @@ OPTIONS
                         3: Correct misscored genotypes [default: -w 5]
                         4: Merge adjacent 100% identical markers
     -o, --out         Output file [default: stdout]
-    --pipeline1       Run the obove steps in one command
+    --pipeline1       Run the four steps in one command
     -h, --help        Print help
 
 end_of_usage
@@ -302,17 +313,18 @@ sub correct_mode{
         for(my $i = $window; $i + $window <= $#positions ; $i++){
             my $position = $positions[$i];
             my @stack = @positions[$i - $window .. $i - 1, $i + 1 .. $i + $window];
-            for (my $j = 2; $j <= $max_idx; $j++){
+            LABEL: for (my $j = 2; $j <= $max_idx; $j++){
                 my $target_gt = $data_ref->{$scaffold}->{$position}->[$j];
-                next if $target_gt eq $m;
+                next LABEL if $target_gt eq $m;
                 my @surroundings = map{$data_ref->{$scaffold}->{$_}->[$j]}@stack;
-                for my $sur_gt(@surroundings){
-                    next if $sur_gt eq $m;
-                    next if $sur_gt eq $target_gt;
+                for my $sur_gt (@surroundings){
+                    next LABEL if $sur_gt eq $m;
+                    next LABEL if $sur_gt eq $target_gt;
                 }
                 my %hash = map{$_, 1}@surroundings;
-                next if keys %hash > 1;
+                next LABEL if keys %hash > 1;
                 my ($correct_gt) = (keys %hash);
+                #warn "$scaffold $position $j\n";
                 $count_markers++;
                 $data_ref->{$scaffold}->{$position}->[$j] = $correct_gt;
             }
