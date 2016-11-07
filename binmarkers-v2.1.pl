@@ -79,7 +79,7 @@ OPTIONS
                         2: Fill missing data [default: -w 3]
                         3: Correct misscored genotypes [default: -w 5]
                         4: Merge adjacent 100% identical markers
-    -o, --out         Output file [default: stdout]
+    -o, --out FILE    Output file [default: stdout]
     --pipeline1       Run the four steps in one command
     -h, --help        Print help
 
