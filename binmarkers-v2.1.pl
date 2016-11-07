@@ -49,7 +49,7 @@ Description
         Surroundings genotypes are the same.
 
     Example commands:
-        perl binmarkers-v2.1.pl example.input.markers.txt -m 0 -w 10_000 -o out.step1.txt
+        perl binmarkers-v2.1.pl example.input.markers.txt -m 1 -w 10_000 -o out.step1.txt
         perl binmarkers-v2.1.pl out.step1.txt -o out.step2.1.txt -m 2 -w 3
         perl binmarkers-v2.1.pl out.step2.1.txt -o out.step2.2.txt -m 2 -w 5
         perl binmarkers-v2.1.pl out.step2.2.txt -o out.step2.3.txt -m 2 -w 7
@@ -57,7 +57,7 @@ Description
         perl binmarkers-v2.1.pl out.step3.txt -o out.step4.txt -m 4
 
     Or,
-        perl binmarkers-v2.1.pl example.input.markers.txt -m 0 -w 10_000 |
+        perl binmarkers-v2.1.pl example.input.markers.txt -m 1 -w 10_000 |
         perl binmarkers-v2.1.pl -m 2 -w 3 |
         perl binmarkers-v2.1.pl -m 2 -w 5 |
         perl binmarkers-v2.1.pl -m 2 -w 7 |
