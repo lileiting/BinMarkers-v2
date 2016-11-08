@@ -14,6 +14,7 @@ our $opt_title = 0;
 our $mode;
 our $window;
 our $no_edge = 0;
+our $minimum;
 
 sub main_usage{
     print <<"end_of_usage";
@@ -39,7 +40,7 @@ Description
         round 1: [-m 2 -w 3]
         round 2: [-m 2 -w 5]
         round 3: [-m 2 -w 7]
-    3. Fill missing genotypes by looking other individuals [-m 3 -w 3]
+    3. Fill missing genotypes by in the breakpoints [-m 3 -w 3]
     4. Correct misscored genotypes with strict criteria [-m 4 -w 5]
     5. Merge 100% identical markers [-m 5]
     * Step 2 and step 4 will process the first and last [w] markers
@@ -54,12 +55,12 @@ Description
 
     Example commands:
         perl $FindBin::Script example.input.markers.txt -m 1 -w 10_000 -o out.step1.txt
-        perl $FindBin::Script out.step1.txt -o out.step2.1.txt -m 2 -w 3
+        perl $FindBin::Script out.step1.txt   -o out.step2.1.txt -m 2 -w 3
         perl $FindBin::Script out.step2.1.txt -o out.step2.2.txt -m 2 -w 5
         perl $FindBin::Script out.step2.2.txt -o out.step2.3.txt -m 2 -w 7
-        perl $FindBin::Script out.step2.3.txt -o out.step3.txt -m 3 -w 3
-        perl $FindBin::Script out.step3.txt -o out.step4.txt -m 4 -w 5
-        perl $FindBin::Script out.step4.txt -o out.step5.txt -m 5
+        perl $FindBin::Script out.step2.3.txt -o out.step3.txt   -m 3 -w 3
+        perl $FindBin::Script out.step3.txt   -o out.step4.txt   -m 4 -w 5
+        perl $FindBin::Script out.step4.txt   -o out.step5.txt   -m 5
 
     Or,
         perl $FindBin::Script example.input.markers.txt -m 1 -w 10_000 |
@@ -83,13 +84,15 @@ OPTIONS
     -m, --mode NUM    Select modes:
                         1: Bin markers for a larger block [default: -w 10_000]
                         2: Fill missing data (majority rules) [default: -w 3]
-                        3: Fill missing data (other ind)[default: -w 3]
+                        3: Fill missing data in the breakpoints [default: -w 3]
                         4: Correct misscored genotypes [default: -w 5]
                         5: Merge adjacent 100% identical markers
     -o, --out FILE    Output file [default: stdout]
-    --pipeline1       Run the four steps in one command
+    --pipeline1       Run the five steps in one command
     --no_edge         Do not process the first and last [w] markers,
                       valid to -m 2 and -m 4
+    --minimum NUM     Minimum block size for -m 2 and -m 4
+                      [default: (w) * 2 + 1]
     -h, --help        Print help
 
 end_of_usage
@@ -106,7 +109,8 @@ sub main{
         "out|o=s",
         "mode|m=i",
         "pipeline1",
-        "no_edge"
+        "no_edge",
+        "minimum=i"
     );
 
     main_usage if @ARGV == 0 and -t STDIN or $args{help};
@@ -115,17 +119,22 @@ sub main{
     my $out = $args{out};
     $mode = $args{mode};
     $no_edge = $args{no_edge};
+    $minimum = $args{minimum};
+    if(defined $minimum and $minimum < 2){
+        die "CAUTION: --minimum must be >= 2\n";
+    }
     my $pipeline1 = $args{pipeline1};
     if($pipeline1){
         warn <<end_of_warn;
-Run pipeline1, four main steps:
+Pipeline1, five main steps:
   1. Bin markers by 10 kb window using majority rules [-m 1 -w 10_000]
   2. Fill missing genotypes using majority rules:
     round 1: [-m 2 -w 3]
     round 2: [-m 2 -w 5]
     round 3: [-m 2 -w 7]
-  3. Correct misscored genotypes with strict criteria [-m 3 -w 5]
-  2. Merge 100% identical markers [-m 4]
+  3. Fill missing genotypes in the breakpoints [-m 3 -w 3]
+  4. Correct misscored genotypes with strict criteria [-m 4 -w 5]
+  5. Merge 100% identical markers [-m 5]
 
 end_of_warn
 
@@ -149,6 +158,7 @@ end_of_warn
     elsif( $mode == 3 ){ $window //= 3      }
     elsif( $mode == 4 ){ $window //= 5      }
     elsif( $mode == 5 ){ 1; }
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
 
     if($out){ open \*STDOUT,">$out" or die $!; }
 
@@ -218,6 +228,10 @@ sub load_input_markers{
 
 ############################################################
 
+#
+# Create bin markers for a larger block size [default: 10kb]
+#
+
 sub bin_mode{
     my ($data_ref) = @_;
     my %data = %$data_ref;
@@ -249,6 +263,10 @@ sub bin_mode{
     warn "[Mode: $mode; Window: $window] Results: $count_markers markers!\n";
 }
 
+#
+# Merge 100% identical markers
+#
+
 sub merge_mode{
     my ($data_ref) = @_;
     my %data = %$data_ref;
@@ -279,6 +297,10 @@ sub merge_mode{
     warn "[Mode: $mode] Results: $count_markers markers!\n";
 }
 
+#
+# Fill missing genotypes using majority rules
+#
+
 sub fill_mode{
     my ($data_ref) = @_;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
@@ -287,7 +309,8 @@ sub fill_mode{
     my $count_markers = 0;
     for my $scaffold (@scaffolds){
         my @positions = sort{$a <=> $b} keys %{$data_ref->{$scaffold}};
-        next if @positions == 1;
+        next unless @positions > 1;
+
         my $first_position = $positions[0];
         my $max_idx = $#{$data_ref->{$scaffold}->{$first_position}};
         my $markers_in_scf = scalar(@positions);
@@ -299,6 +322,7 @@ sub fill_mode{
             #my @stack = @positions[$i - $window .. $i - 1, $i + 1 .. $i + $window];
             next if $no_edge and ($i < $window or $i > $#positions - $window);
             my @stack = @positions[_determine_surroundings($#positions, $i)];
+            next unless @stack >= $minimum - 1;
 
             for (my $j = 2; $j <= $max_idx; $j++){
                 next if $data_ref->{$scaffold}->{$position}->[$j] ne $m;
@@ -313,6 +337,10 @@ sub fill_mode{
     warn "[Mode: $mode; Window: $window] $count_markers missing genotypes were filled!\n";
 }
 
+#
+# Fill missing genotypes in the breakpoints
+#
+
 sub fill_mode2{
     # Fill missing genotypes by looking patterns in other individuals
     # If it was preferred with the previous marker or the below marker
@@ -323,7 +351,8 @@ sub fill_mode2{
     my $count_markers = 0;
     for my $scaffold (@scaffolds){
         my @positions = sort{$a <=> $b} keys %{$data_ref->{$scaffold}};
-        next if @positions == 1;
+        next unless @positions > 1;
+
         my $first_position = $positions[0];
         my $max_idx = $#{$data_ref->{$scaffold}->{$first_position}};
         my $markers_in_scf = scalar(@positions);
@@ -378,6 +407,9 @@ sub fill_mode2{
     warn "[Mode: $mode; Window: $window] $count_markers missing genotypes were filled!\n";
 }
 
+#
+# Correction mode
+# 
 
 sub correct_mode{
     my ($data_ref) = @_;
@@ -387,7 +419,8 @@ sub correct_mode{
     my $count_markers = 0;
     for my $scaffold (@scaffolds){
         my @positions = sort{$a <=> $b} keys %{$data_ref->{$scaffold}};
-        next if @positions == 1;
+        next unless @positions > 1;
+
         my $first_position = $positions[0];
         my $max_idx = $#{$data_ref->{$scaffold}->{$first_position}};
         my $markers_in_scf = scalar(@positions);
@@ -399,6 +432,7 @@ sub correct_mode{
             #my @stack = @positions[$i - $window .. $i - 1, $i + 1 .. $i + $window];
             next if $no_edge and ($i < $window or $i > $#positions - $window);
             my @stack = @positions[_determine_surroundings($#positions, $i)];
+            next unless @stack >= $minimum - 1;
 
             die "$#positions, $i" if @stack == 0;
             LABEL: for (my $j = 2; $j <= $max_idx; $j++){
