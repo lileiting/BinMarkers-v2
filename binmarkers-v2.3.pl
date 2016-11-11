@@ -140,7 +140,7 @@ end_of_warn
 
         my $option_out = $out ? "-o $out" : '';
         system("perl $0 -m 1 -w 10_000 @ARGV | perl $0 -m 2 -w 3 | " .
-            "perl $0 -m 2 -w 5 | perl $0 -m 2 -w 7 | perl $0 -m 3 -w 3" .
+            "perl $0 -m 2 -w 5 | perl $0 -m 2 -w 7 | perl $0 -m 3 -w 3 | " .
             "perl $0 -m 4 -w 5 | perl $0 -m 5 $option_out"
         );
         exit;
