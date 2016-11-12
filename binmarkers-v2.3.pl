@@ -3,6 +3,10 @@
 # Idea by Ray Ming, written by Leiting Li, Nov 3, 2016
 # Add imputation step (fill missing data, correct misscored genotypes), Nov 5, 2016
 # Revise the filling missing genotypes step, Nov 7, 2016
+# TODO:
+#   change mode name to strings, not numbers
+#   a subroutine to correct double error
+#   a subroutine to correct triple error
 
 use warnings;
 use strict;
@@ -54,22 +58,22 @@ Description
         Surroundings genotypes are the same.
 
     Example commands:
-        perl $FindBin::Script example.input.markers.txt -m 1 -w 10_000 -o out.step1.txt
-        perl $FindBin::Script out.step1.txt   -o out.step2.1.txt -m 2 -w 3
-        perl $FindBin::Script out.step2.1.txt -o out.step2.2.txt -m 2 -w 5
-        perl $FindBin::Script out.step2.2.txt -o out.step2.3.txt -m 2 -w 7
-        perl $FindBin::Script out.step2.3.txt -o out.step3.txt   -m 3 -w 3
-        perl $FindBin::Script out.step3.txt   -o out.step4.txt   -m 4 -w 5
-        perl $FindBin::Script out.step4.txt   -o out.step5.txt   -m 5
+        perl $FindBin::Script example.input.markers.txt -m bin -w 10_000 -o out.step1.txt
+        perl $FindBin::Script out.step1.txt   -o out.step2.1.txt -m fill -w 3
+        perl $FindBin::Script out.step2.1.txt -o out.step2.2.txt -m fill -w 5
+        perl $FindBin::Script out.step2.2.txt -o out.step2.3.txt -m fill -w 7
+        perl $FindBin::Script out.step2.3.txt -o out.step3.txt   -m fill2 -w 3
+        perl $FindBin::Script out.step3.txt   -o out.step4.txt   -m correct -w 5
+        perl $FindBin::Script out.step4.txt   -o out.step5.txt   -m merge
 
     Or,
-        perl $FindBin::Script example.input.markers.txt -m 1 -w 10_000 |
-        perl $FindBin::Script -m 2 -w 3 |
-        perl $FindBin::Script -m 2 -w 5 |
-        perl $FindBin::Script -m 2 -w 7 |
-        perl $FindBin::Script -m 3 -w 3 |
-        perl $FindBin::Script -m 4 -w 5 |
-        perl $FindBin::Script -m 5 -o out.step5.txt
+        perl $FindBin::Script example.input.markers.txt -m bin -w 10_000 |
+        perl $FindBin::Script -m fill -w 3 |
+        perl $FindBin::Script -m fill -w 5 |
+        perl $FindBin::Script -m fill -w 7 |
+        perl $FindBin::Script -m fill2 -w 3 |
+        perl $FindBin::Script -m correct -w 5 |
+        perl $FindBin::Script -m merge -o out.step5.txt
 
     Or, (a shortcut for the above command)
         perl $FindBin::Script example.input.markers.txt -pipeline1 -o out.step5.txt
@@ -82,11 +86,11 @@ OPTIONS
     -t, --title       Treat first line as title [default: no title line]
     -w, --window NUM  Window size [defaults are based on differnt modes]
     -m, --mode NUM    Select modes:
-                        1: Bin markers for a larger block [default: -w 10_000]
-                        2: Fill missing data (majority rules) [default: -w 3]
-                        3: Fill missing data in the breakpoints [default: -w 3]
-                        4: Correct misscored genotypes [default: -w 5]
-                        5: Merge adjacent 100% identical markers
+                            bin: Bin markers for a larger block [default: -w 10_000]
+                           fill: Fill missing data (majority rules) [default: -w 3]
+                          fill2: Fill missing data in the breakpoints [default: -w 3]
+                        correct: Correct misscored genotypes [default: -w 5]
+                          merge: Merge adjacent 100% identical markers
     -o, --out FILE    Output file [default: stdout]
     --pipeline1       Run the five steps in one command
     --no_edge         Do not process the first and last [w] markers,
@@ -107,7 +111,7 @@ sub main{
         "window|w=i",
         "title|t",
         "out|o=s",
-        "mode|m=i",
+        "mode|m=s",
         "pipeline1",
         "no_edge",
         "minimum=i"
@@ -120,46 +124,18 @@ sub main{
     $mode = $args{mode};
     $no_edge = $args{no_edge};
     $minimum = $args{minimum};
-    if(defined $minimum and $minimum < 2){
-        die "CAUTION: --minimum must be >= 2\n";
-    }
-    my $pipeline1 = $args{pipeline1};
-    if($pipeline1){
-        warn <<end_of_warn;
-Pipeline1, five main steps:
-  1. Bin markers by 10 kb window using majority rules [-m 1 -w 10_000]
-  2. Fill missing genotypes using majority rules:
-    round 1: [-m 2 -w 3]
-    round 2: [-m 2 -w 5]
-    round 3: [-m 2 -w 7]
-  3. Fill missing genotypes in the breakpoints [-m 3 -w 3]
-  4. Correct misscored genotypes with strict criteria [-m 4 -w 5]
-  5. Merge 100% identical markers [-m 5]
 
-end_of_warn
+    &pipeline1($out) if $args{pipeline1};
 
-        my $option_out = $out ? "-o $out" : '';
-        system("perl $0 -m 1 -w 10_000 @ARGV | perl $0 -m 2 -w 3 | " .
-            "perl $0 -m 2 -w 5 | perl $0 -m 2 -w 7 | perl $0 -m 3 -w 3 | " .
-            "perl $0 -m 4 -w 5 | perl $0 -m 5 $option_out"
-        );
-        exit;
-    }
-
+    die "CAUTION: --minimum must be >= 2\n"
+        if defined $minimum and $minimum < 2;
     die "CAUTION: Window size must be > 0\n"
         if defined $window and $window <= 0;
     die "Please select a mode using -m or --mode !"
         unless defined $mode;
     die "CAUTION: undefinned mode `$mode`!!!"
-        unless $mode =~ /^[1-5]$/;
-
-    if(    $mode == 1 ){ $window //= 10_000 }
-    elsif( $mode == 2 ){ $window //= 3      }
-    elsif( $mode == 3 ){ $window //= 3      }
-    elsif( $mode == 4 ){ $window //= 5      }
-    elsif( $mode == 5 ){ 1; }
+        unless $mode =~ /^(bin|fill2?|correct|merge)$/;
     $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
-
     if($out){ open \*STDOUT,">$out" or die $!; }
 
     my ($inputFile, $fh);
@@ -173,18 +149,43 @@ end_of_warn
     }
 
     warn "[Mode: $mode"
-      . ($mode == 5 ? "" : "; Window: $window")
+      #. ($mode == 5 ? "" : "; Window: $window")
       . "] Loading data from `$inputFile` ...\n";
 
     chomp(my $title = <$fh>) if $opt_title;
     my $data_ref = load_input_markers($fh);
     print $title if $opt_title;
-    if(    $mode == 1 ){ bin_mode(    $data_ref); }
-    elsif( $mode == 2 ){ fill_mode(   $data_ref); }
-    elsif( $mode == 3 ){ fill_mode2(  $data_ref); }
-    elsif( $mode == 4 ){ correct_mode($data_ref); }
-    elsif( $mode == 5 ){ merge_mode(  $data_ref); }
+    if(    $mode eq 'bin'){ bin_mode(    $data_ref); }
+    elsif( $mode eq 'fill' ){ fill_mode(   $data_ref); }
+    elsif( $mode eq 'fill2' ){ fill_mode2(  $data_ref); }
+    elsif( $mode eq 'correct' ){ correct_mode($data_ref); }
+    elsif( $mode eq 'merge' ){ merge_mode(  $data_ref); }
     else{ die "CAUTION: Undefined mode `$mode`!!!" }
+}
+
+############################################################
+
+sub pipeline1 {
+    my $out = shift;
+    warn <<end_of_warn;
+Pipeline1, five main steps:
+1. Bin markers by 10 kb window using majority rules [-m 1 -w 10_000]
+2. Fill missing genotypes using majority rules:
+round 1: [-m 2 -w 3]
+round 2: [-m 2 -w 5]
+round 3: [-m 2 -w 7]
+3. Fill missing genotypes in the breakpoints [-m 3 -w 3]
+4. Correct misscored genotypes with strict criteria [-m 4 -w 5]
+5. Merge 100% identical markers [-m 5]
+
+end_of_warn
+
+    my $option_out = $out ? "-o $out" : '';
+    system("perl $0 -m bin -w 10_000 @ARGV | perl $0 -m fill -w 3 | " .
+        "perl $0 -m fill -w 5 | perl $0 -m fill -w 7 | perl $0 -m fill2 -w 3 | " .
+        "perl $0 -m correct -w 5 | perl $0 -m merge $option_out"
+    );
+    exit;
 }
 
 ############################################################
@@ -220,7 +221,7 @@ sub load_input_markers{
     }
     close $fh;
     warn "[Mode: $mode"
-      . ($mode == 5 ? "" : "; Window: $window")
+      #. ($mode == 5 ? "" : "; Window: $window")
       . "] $count_markers markers were loaded!\n";
     return \%data;
 }
@@ -234,6 +235,7 @@ sub load_input_markers{
 
 sub bin_mode{
     my ($data_ref) = @_;
+    $window //= 10_000;
     my %data = %$data_ref;
     my @scaffolds = _scaffold_sort( keys %data );
 
@@ -303,6 +305,7 @@ sub merge_mode{
 
 sub fill_mode{
     my ($data_ref) = @_;
+    $window //= 3;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
@@ -345,6 +348,7 @@ sub fill_mode2{
     # Fill missing genotypes by looking patterns in other individuals
     # If it was preferred with the previous marker or the below marker
     my ($data_ref) = @_;
+    $window //= 3;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
@@ -409,10 +413,11 @@ sub fill_mode2{
 
 #
 # Correction mode
-# 
+#
 
 sub correct_mode{
     my ($data_ref) = @_;
+    $window //= 5;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
