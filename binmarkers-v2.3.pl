@@ -66,7 +66,7 @@ Description
         perl $FindBin::Script out.step3.txt   -o out.step4.txt   -m correct -w 5
         perl $FindBin::Script out.step4.txt   -o out.step5.txt   -m merge
 
-    Or,
+    Or use pipe to run them in one command, such as
         perl $FindBin::Script example.input.markers.txt -m bin -w 10_000 |
         perl $FindBin::Script -m fill -w 3 |
         perl $FindBin::Script -m fill -w 5 |
@@ -74,9 +74,6 @@ Description
         perl $FindBin::Script -m fill2 -w 3 |
         perl $FindBin::Script -m correct -w 5 |
         perl $FindBin::Script -m merge -o out.step5.txt
-
-    Or, (a shortcut for the above command)
-        perl $FindBin::Script example.input.markers.txt -pipeline1 -o out.step5.txt
 
     For manual checking, just copy data in the `example.input.markers.txt` file
         and the `out.step4.txt` file in an Excel file and then sort by
@@ -90,9 +87,10 @@ OPTIONS
                            fill: Fill missing data (majority rules) [default: -w 3]
                           fill2: Fill missing data in the breakpoints [default: -w 3]
                         correct: Correct misscored genotypes [default: -w 5]
+                        correct2: Correct misscored genotypes [default: -w 5]
+                        correct3: Correct misscored genotypes [default: -w 5]
                           merge: Merge adjacent 100% identical markers
     -o, --out FILE    Output file [default: stdout]
-    --pipeline1       Run the five steps in one command
     --no_edge         Do not process the first and last [w] markers,
                       valid to -m 2 and -m 4
     --minimum NUM     Minimum block size for -m 2 and -m 4
@@ -112,7 +110,6 @@ sub main{
         "title|t",
         "out|o=s",
         "mode|m=s",
-        "pipeline1",
         "no_edge",
         "minimum=i"
     );
@@ -134,7 +131,7 @@ sub main{
     die "Please select a mode using -m or --mode !"
         unless defined $mode;
     die "CAUTION: undefinned mode `$mode`!!!"
-        unless $mode =~ /^(bin|fill2?|correct|merge)$/;
+        unless $mode =~ /^(bin|fill2?|correct\d?|merge)$/;
     $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
     if($out){ open \*STDOUT,">$out" or die $!; }
 
@@ -159,33 +156,10 @@ sub main{
     elsif( $mode eq 'fill' ){ fill_mode(   $data_ref); }
     elsif( $mode eq 'fill2' ){ fill_mode2(  $data_ref); }
     elsif( $mode eq 'correct' ){ correct_mode($data_ref); }
+    elsif( $mode eq 'correct2'){ correct_mode2($data_ref); }
+    elsif( $mode eq 'correct3'){ correct_mode3($data_ref); }
     elsif( $mode eq 'merge' ){ merge_mode(  $data_ref); }
     else{ die "CAUTION: Undefined mode `$mode`!!!" }
-}
-
-############################################################
-
-sub pipeline1 {
-    my $out = shift;
-    warn <<end_of_warn;
-Pipeline1, five main steps:
-1. Bin markers by 10 kb window using majority rules [-m 1 -w 10_000]
-2. Fill missing genotypes using majority rules:
-round 1: [-m 2 -w 3]
-round 2: [-m 2 -w 5]
-round 3: [-m 2 -w 7]
-3. Fill missing genotypes in the breakpoints [-m 3 -w 3]
-4. Correct misscored genotypes with strict criteria [-m 4 -w 5]
-5. Merge 100% identical markers [-m 5]
-
-end_of_warn
-
-    my $option_out = $out ? "-o $out" : '';
-    system("perl $0 -m bin -w 10_000 @ARGV | perl $0 -m fill -w 3 | " .
-        "perl $0 -m fill -w 5 | perl $0 -m fill -w 7 | perl $0 -m fill2 -w 3 | " .
-        "perl $0 -m correct -w 5 | perl $0 -m merge $option_out"
-    );
-    exit;
 }
 
 ############################################################
@@ -306,6 +280,7 @@ sub merge_mode{
 sub fill_mode{
     my ($data_ref) = @_;
     $window //= 3;
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
@@ -349,6 +324,7 @@ sub fill_mode2{
     # If it was preferred with the previous marker or the below marker
     my ($data_ref) = @_;
     $window //= 3;
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
@@ -418,6 +394,7 @@ sub fill_mode2{
 sub correct_mode{
     my ($data_ref) = @_;
     $window //= 5;
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
     my @scaffolds = _scaffold_sort( keys %$data_ref );
 
     warn "[Mode: $mode; Window: $window] Processing data ...\n";
@@ -463,7 +440,119 @@ sub correct_mode{
     warn "[Mode: $mode; Window: $window] $count_markers misscored genotypes were corrected!\n";
 }
 
-#######################################################
+#
+# Correct double error
+#
+
+sub correct_mode2{
+    my ($data_ref) = @_;
+    $window //= 5;
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
+    my @scaffolds = _scaffold_sort( keys %$data_ref );
+
+    warn "[Mode: $mode; Window: $window] Processing data ...\n";
+    my $count_markers = 0;
+    for my $scaffold (@scaffolds){
+        my @positions = sort{$a <=> $b} keys %{$data_ref->{$scaffold}};
+        next unless @positions > 1;
+
+        my $first_position = $positions[0];
+        my $max_idx = $#{$data_ref->{$scaffold}->{$first_position}};
+        my $markers_in_scf = scalar(@positions);
+        #warn "Process $scaffold ($markers_in_scf markers) ...\n";
+
+        #for(my $i = $window; $i + $window <= $#positions ; $i++){
+        for(my $i = 0; $i <= $#positions; $i++){
+            my $position = $positions[$i];
+            #my @stack = @positions[$i - $window .. $i - 1, $i + 1 .. $i + $window];
+            next if $no_edge and ($i < $window or $i > $#positions - $window);
+            my @stack = @positions[_determine_surroundings($#positions, $i)];
+            next unless @stack >= $minimum - 1;
+
+            die "$#positions, $i" if @stack == 0;
+            LABEL: for (my $j = 2; $j <= $max_idx; $j++){
+                my $target_gt = $data_ref->{$scaffold}->{$position}->[$j];
+                next LABEL if $target_gt eq $m;
+                if($i > 0 and $i < $#positions){
+                    my $above_gt = $data_ref->{$scaffold}->{$positions[$i-1]}->[$j];
+                    my $below_gt = $data_ref->{$scaffold}->{$positions[$i+1]}->[$j];
+                    next LABEL if $target_gt eq $above_gt and $target_gt eq $below_gt;
+                }
+                my @surroundings = map{$data_ref->{$scaffold}->{$_}->[$j]}@stack;
+                die if @surroundings == 0;
+                my %hash;
+                map{$hash{$_}++}@surroundings;
+                my @gt = sort{$hash{$b} <=> $hash{$a}} keys %hash;
+                next if keys %hash < 2;
+                next LABEL unless @surroundings - $hash{$gt[0]} <= 1;
+                next LABEL if $gt[0] eq $target_gt;
+                my $correct_gt = $gt[0];
+                #warn "$scaffold $position $j\n";
+                #warn "$scaffold\t$position\t$j\t@surroundings\t$target_gt\t$correct_gt\n";
+                $count_markers++;
+                $data_ref->{$scaffold}->{$position}->[$j] = $correct_gt;
+            }
+        }
+    }
+    _print_marker_matrix($data_ref);
+    warn "[Mode: $mode; Window: $window] $count_markers misscored genotypes were corrected!\n";
+}
+
+sub correct_mode3{
+    my ($data_ref) = @_;
+    $window //= 5;
+    $minimum = $window * 2 + 1 if defined $window and not defined $minimum;
+    my @scaffolds = _scaffold_sort( keys %$data_ref );
+
+    warn "[Mode: $mode; Window: $window] Processing data ...\n";
+    my $count_markers = 0;
+    for my $scaffold (@scaffolds){
+        my @positions = sort{$a <=> $b} keys %{$data_ref->{$scaffold}};
+        next unless @positions > 1;
+
+        my $first_position = $positions[0];
+        my $max_idx = $#{$data_ref->{$scaffold}->{$first_position}};
+        my $markers_in_scf = scalar(@positions);
+        #warn "Process $scaffold ($markers_in_scf markers) ...\n";
+
+        #for(my $i = $window; $i + $window <= $#positions ; $i++){
+        for(my $i = 0; $i <= $#positions; $i++){
+            my $position = $positions[$i];
+            #my @stack = @positions[$i - $window .. $i - 1, $i + 1 .. $i + $window];
+            next if $no_edge and ($i < $window or $i > $#positions - $window);
+            my @stack = @positions[_determine_surroundings($#positions, $i)];
+            next unless @stack >= $minimum - 1;
+
+            die "$#positions, $i" if @stack == 0;
+            LABEL: for (my $j = 2; $j <= $max_idx; $j++){
+                my $target_gt = $data_ref->{$scaffold}->{$position}->[$j];
+                next LABEL if $target_gt eq $m;
+                if($i > 0 and $i < $#positions){
+                    my $above_gt = $data_ref->{$scaffold}->{$positions[$i-1]}->[$j];
+                    my $below_gt = $data_ref->{$scaffold}->{$positions[$i+1]}->[$j];
+                    next LABEL if $target_gt eq $above_gt and $target_gt eq $below_gt;
+                }
+                my @surroundings = map{$data_ref->{$scaffold}->{$_}->[$j]}@stack;
+                die if @surroundings == 0;
+                my %hash;
+                map{$hash{$_}++}@surroundings;
+                my @gt = sort{$hash{$b} <=> $hash{$a}} keys %hash;
+                next if keys %hash < 2;
+                next LABEL unless @surroundings - $hash{$gt[0]} <= 2;
+                next LABEL if $gt[0] eq $target_gt;
+                my $correct_gt = $gt[0];
+                #warn "$scaffold $position $j\n";
+                #warn "$scaffold\t$position\t$j\t@surroundings\t$target_gt\t$correct_gt\n";
+                $count_markers++;
+                $data_ref->{$scaffold}->{$position}->[$j] = $correct_gt;
+            }
+        }
+    }
+    _print_marker_matrix($data_ref);
+    warn "[Mode: $mode; Window: $window] $count_markers misscored genotypes were corrected!\n";
+}
+
+############################################################
 
 sub _majority_rules{
     my ($data_ref, $scaffold, @positions) = @_;
