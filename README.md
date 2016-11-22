@@ -2,7 +2,7 @@
 
 The is a new version of script to create bin markers. Previous version: [BinMarkers](https://github.com/lileiting/BinMarkers)
 
-* Author: [Leiting Li](https://github.com/lileiting), Ray Ming
+* Author: [Leiting Li](https://github.com/lileiting)
 * Email: lileiting@gmail.com
 * LICENCE: [BSD](http://opensource.org/licenses/bsd-license.php)
 
