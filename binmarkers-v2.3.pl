@@ -3,10 +3,6 @@
 # Idea by Ray Ming, written by Leiting Li, Nov 3, 2016
 # Add imputation step (fill missing data, correct misscored genotypes), Nov 5, 2016
 # Revise the filling missing genotypes step, Nov 7, 2016
-# TODO:
-#   change mode name to strings, not numbers
-#   a subroutine to correct double error
-#   a subroutine to correct triple error
 
 use warnings;
 use strict;
