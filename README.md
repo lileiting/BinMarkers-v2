@@ -1,6 +1,6 @@
 # Binmarkers version 2
 
-The is a new version of script to create bin markers. Previous version: [BinMarkers](https://github.com/lileiting/BinMarkers)
+The is a new version for the script to create bin markers. Previous version: [BinMarkers](https://github.com/lileiting/BinMarkers)
 
 * Author: [Leiting Li](https://github.com/lileiting)
 * Email: lileiting@gmail.com
