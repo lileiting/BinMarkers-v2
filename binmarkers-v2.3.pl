@@ -1,9 +1,5 @@
 #!/usr/bin/env perl
 
-# Idea by Ray Ming, written by Leiting Li, Nov 3, 2016
-# Add imputation step (fill missing data, correct misscored genotypes), Nov 5, 2016
-# Revise the filling missing genotypes step, Nov 7, 2016
-
 use warnings;
 use strict;
 use FindBin;
