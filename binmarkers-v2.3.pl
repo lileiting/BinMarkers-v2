@@ -166,10 +166,11 @@ sub load_input_markers{
     );
     my $count_markers = 0;
     while(<$fh>){
-        $count_markers++;
         chomp;
         s/\r//g;
         my @f = split /\t/;
+        next if not exists $gt_codes{$f[1]};
+        $count_markers++;
         die "CAUTION for `$f[0]`: marker name format is \
             scaffold-position:width:markers or scaffold_position(width)"
             unless $f[0] =~ /^([A-Za-z0-9\.]+)[_\-](\d+)(:(\d+):(\d+))?/;
