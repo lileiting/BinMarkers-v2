@@ -83,3 +83,10 @@ The is a new version for the script to create bin markers. Previous version: [Bi
         -h, --help        Print help
     
 
+
+## Citation
+
+When using this program please cite the following paper:
+
+Qin M-F, Li L-T, Singh J, Sun M-Y, Bai B, Li S-W, Ni J-P, Zhang J-Y, Zhang X, Wei W-L, Zhang M-Y, Li J-M, Qi K-J, Zhang S-L, Khan A, Wu J. [Construction of a high-density Bin-map and identification of the fruit quality related quantitative trait loci and functional genes in pear](https://doi.org/10.1093/hr/uhac141). _Horticulture Research_, 2022, uhac141. 
+
